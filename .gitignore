@@ -1,6 +1,5 @@
-cmake-build-debug
-a.exe
-.idea/
+a
+encoder
 
 # Prerequisites
 *.d

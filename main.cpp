@@ -1,22 +1,52 @@
-#include <iostream>
+#include <stdio.h>
+#include <unistd.h>
+#include <errno.h>
+#include <string.h>
+#include <sys/mman.h>
 
-using namespace std;
+void foo(void);
+int change_page_permissions_of_address(void *addr);
 
+int main(void) {
+    void *foo_addr = (void*)foo;
 
-void some_function() {
-    cout << "Hello, World!" << endl;
+    // Change the permissions of the page that contains foo() to read, write, and execute
+    // This assumes that foo() is fully contained by a single page
+    if(change_page_permissions_of_address(foo_addr) == -1) {
+        fprintf(stderr, "Error while changing page permissions of foo(): %s\n", strerror(errno));
+        return 1;
+    }
+
+    // Call the unmodified foo()
+    puts("Calling foo...");
+    foo();
+
+    // Change the immediate value in the addl instruction in foo() to 42
+    unsigned char *instruction = (unsigned char*)foo_addr + 18;
+    *instruction = 0x2A;
+
+    // Call the modified foo()
+    puts("Calling foo...");
+    foo();
+
+    return 0;
 }
 
-int main() {
-    void (*fp)();
-    fp = &some_function;
-    cout << &fp << endl;
-    cout << sizeof(fp) << endl;
+void foo(void) {
+    int i=0;
+    i++;
+    printf("i: %d\n", i);
+}
 
-    int (*fmain)();
-    fmain = &main;
-    cout << &fmain << endl;
-    cout << sizeof(fmain) << endl;
+int change_page_permissions_of_address(void *addr) {
+    // Move the pointer to the page boundary
+    int page_size = getpagesize();
+    // addr -= (unsigned long)addr % page_size;
+    addr = static_cast<char *>(addr) - ((unsigned long)addr % page_size);
+
+    if(mprotect(addr, page_size, PROT_READ | PROT_WRITE | PROT_EXEC) == -1) {
+        return -1;
+    }
 
     return 0;
 }
