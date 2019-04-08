@@ -4,8 +4,14 @@
 #include <string.h>
 #include <sys/mman.h>
 
+using namespace std;
+
+typedef unsigned char uchar;
+
 void foo(void);
+
 int change_page_permissions_of_address(void *addr);
+void decode();
 
 int main(void) {
     void *foo_addr = (void*)foo;
@@ -16,6 +22,8 @@ int main(void) {
         fprintf(stderr, "Error while changing page permissions of foo(): %s\n", strerror(errno));
         return 1;
     }
+
+    decode();
 
     // Call the unmodified foo()
     puts("Calling foo...");
@@ -49,4 +57,26 @@ int change_page_permissions_of_address(void *addr) {
     }
 
     return 0;
+}
+
+void decode() {
+    const uchar key = 56;
+
+    void *foo_addr = (void*)foo;
+    uchar *start = (uchar*) foo_addr;
+
+    uchar buffer[3] = {0, 0, 0};
+
+    int count = 0;
+
+    while ((count < 3) || not ((buffer[0] == 0xc3) && (buffer[1] == 0x66) && (buffer[2] == 0x66))) {
+        buffer[0] = buffer[1];
+        buffer[1] = buffer[2];
+
+        uchar *instruction = (uchar*) foo_addr + count;
+        *instruction = *instruction ^ key;
+
+        buffer[2] = *instruction;
+        count++;
+    }
 }

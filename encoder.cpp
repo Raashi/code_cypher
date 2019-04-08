@@ -5,6 +5,30 @@
 
 using namespace std;
 
+typedef unsigned char uchar;
+
+
+void encode(vector<uchar>& data) {
+	const int start = 0xcf0;
+	const uchar key = 56;
+
+    uchar buffer[3] = {0, 0, 0};
+
+    int count = 0;
+
+    while ((count < 3) || not ((buffer[0] == 0xc3) && (buffer[1] == 0x66) && (buffer[2] == 0x66))) {
+        buffer[0] = buffer[1];
+        buffer[1] = buffer[2];
+
+        uchar instruction = data[start + count];
+        data[start + count] = instruction ^ key;
+
+        buffer[2] = instruction;
+        count++;
+    }
+    cout << "last address: " << start + count << endl;
+}
+
 
 int main(int argc, char const *argv[])
 {
@@ -24,17 +48,17 @@ int main(int argc, char const *argv[])
 	orig_file.read((char*) &data[0], len);
 	orig_file.close();
 
-	cout << len << endl;
+	cout << "reading success" << endl;
 
-	data[3659] = 22;
+	encode(data);
 
-	cout << "success" << endl;
+	cout << "encoding success" << endl;
 
 	ofstream fout(argv[1], ios::out | ios::binary);
  	fout.write((char*)&data[0], data.size() * sizeof(unsigned char));
  	fout.close();
 
- 	cout << "success" << endl;
+ 	cout << "writing success" << endl;
 
 	return 0;
 }
