@@ -8,7 +8,9 @@ using namespace std;
 
 typedef unsigned char uchar;
 
-void foo(void);
+extern "C" {
+	void foo(void);
+};
 
 int change_page_permissions_of_address(void *addr);
 void decode();
@@ -25,15 +27,6 @@ int main(void) {
 
     decode();
 
-    // Call the unmodified foo()
-    puts("Calling foo...");
-    foo();
-
-    // Change the immediate value in the addl instruction in foo() to 42
-    unsigned char *instruction = (unsigned char*)foo_addr + 18;
-    *instruction = 0x2A;
-
-    // Call the modified foo()
     puts("Calling foo...");
     foo();
 
@@ -41,6 +34,7 @@ int main(void) {
 }
 
 void foo(void) {
+	puts(__func__);
     int i=0;
     i++;
     printf("i: %d\n", i);
@@ -52,9 +46,8 @@ int change_page_permissions_of_address(void *addr) {
     // addr -= (unsigned long)addr % page_size;
     addr = static_cast<char *>(addr) - ((unsigned long)addr % page_size);
 
-    if(mprotect(addr, page_size, PROT_READ | PROT_WRITE | PROT_EXEC) == -1) {
+    if(mprotect(addr, page_size, PROT_READ | PROT_WRITE | PROT_EXEC) == -1)
         return -1;
-    }
 
     return 0;
 }
