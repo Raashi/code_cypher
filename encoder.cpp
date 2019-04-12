@@ -10,6 +10,10 @@ using namespace std;
 
 typedef unsigned char uchar;
 
+const string SUCCESS = "[ OK ] ";
+const string FAIL    = "[FAIL] ";
+const pair<int, int> FUNC_NOT_FOUND = pair<int, int>(-1, -1);
+
 
 vector<string> split(string s, char sep='\n') {
 	vector<string> res = vector<string>();
@@ -52,6 +56,8 @@ pair<int, int> get_function_be(vector<string> dump, string func_name) {
 		if (dump[i] == "_" + func_name + ":")
 			break;
 	}
+	if (i == dump.size()) 
+		return FUNC_NOT_FOUND;
 	i++;
 	// find function end
 	int j = i + 1;
@@ -62,8 +68,8 @@ pair<int, int> get_function_be(vector<string> dump, string func_name) {
 }
 
 
-int hex_to_int(string hex) {
-	unsigned long hex_value = std::strtoul(hex.c_str(), 0, 16);
+int hex_to_int(string hexx) {
+	unsigned long hex_value = std::strtoul(hexx.c_str(), 0, 16);
     return (int) hex_value;
 }
 
@@ -75,9 +81,7 @@ int extract_address(string line) {
 }
 
 
-void encode(vector<uchar>& data, int start, int end) {
-	const uchar key = 56;
-
+void encode(vector<uchar>& data, uchar key, int start, int end) {
     for (int i = start; i < end; ++i)
     	data[i] ^= key;
 }
@@ -89,7 +93,7 @@ int main(int argc, char const *argv[])
 
 	if(orig_file.fail())
     {
-    	cout << "Error Opening Input File [" << argv[1] << "]. " << strerror(errno) << "\n";
+    	cout << FAIL << "Error Opening Input File [" << argv[1] << "]. " << strerror(errno) << "\n";
     	return 0;
     }
 
@@ -101,25 +105,37 @@ int main(int argc, char const *argv[])
 	orig_file.read((char*) &data[0], len);
 	orig_file.close();
 
-	cout << "reading success" << endl;
+	cout << SUCCESS << "reading" << endl;
 
 	string cmd = "objdump -section=__text -d " + string(argv[1]);
  	string objdump = exec(cmd.c_str()); 	
  	vector<string> dump = split(objdump);
 
- 	pair<int, int> be = get_function_be(dump, "foo");
- 	cout << dump[be.first] << endl << dump[be.second] << endl;
- 	cout << extract_address(dump[be.first]) << endl << extract_address(dump[be.second]) << endl;
+ 	if (argc < 3) 
+ 		cout << FAIL << "no function names to encode" << endl;
 
- 	encode(data, extract_address(dump[be.first]), extract_address(dump[be.second])); 
+ 	uchar key;
+ 	unsigned int key_int;
+ 	cout << "Enter key: ";
+ 	cin >> key_int;
+ 	key = key_int;
 
-	cout << "encoding success" << endl;
+ 	for (int i = 2; i < argc; ++i) {
+ 		string func_name = string(argv[i]);
+ 		pair<int, int> be = get_function_be(dump, func_name);
+ 		if (be == FUNC_NOT_FOUND) {
+ 			cout << FAIL << "function " << func_name << " wasn't found" << endl;
+ 			continue;
+ 		}
+ 		encode(data, key, extract_address(dump[be.first]), extract_address(dump[be.second]));
+ 		cout << SUCCESS << "encoding " << func_name << endl;
+ 	} 
 
 	ofstream fout(argv[1], ios::out | ios::binary);
  	fout.write((char*)&data[0], data.size() * sizeof(unsigned char));
  	fout.close();
 
- 	cout << "writing success" << endl;
+ 	cout << SUCCESS << "writing" << endl;
 
 	return 0;
 }

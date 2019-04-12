@@ -1,19 +1,24 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
-#include <string.h>
+#include <string>
 #include <sys/mman.h>
 
 using namespace std;
 
 typedef unsigned char uchar;
 
+const string SUCCESS = "[ OK ] ";
+const string FAIL    = "[FAIL] ";
+
 extern "C" {
 	void foo(void);
 };
 
 int change_page_permissions_of_address(void *addr);
-void decode();
+bool compare_buffers(uchar buf1[4], uchar buf2[4]);
+uchar* get_function_end(uchar* start);
+void decode(uchar key);
 
 int main(void) {
     void *foo_addr = (void*)foo;
@@ -25,19 +30,27 @@ int main(void) {
         return 1;
     }
 
-    decode();
+    uchar key;
+    unsigned int key_int;
+    printf("Enter key: ");
+    scanf("%i", &key_int);
+ 	key = key_int;
 
-    puts("Calling foo...");
+    decode(key);
+
     foo();
 
     return 0;
 }
 
 void foo(void) {
-	puts(__func__);
+	printf("%s entering function %s\n", SUCCESS.c_str(), __func__);
+    
     int i=0;
     i++;
     printf("i: %d\n", i);
+    
+    printf("%s leaving function %s\n", SUCCESS.c_str(), __func__);
 }
 
 int change_page_permissions_of_address(void *addr) {
@@ -52,24 +65,42 @@ int change_page_permissions_of_address(void *addr) {
     return 0;
 }
 
-void decode() {
-    const uchar key = 56;
+bool compare_buffers(uchar* buf1[4], uchar* buf2[4]) {
+	for (int i = 0; i < 4; ++i)
+		if (*(buf1[i]) != *(buf2[i]))
+			return false;
+	return true;
+}
 
-    void *foo_addr = (void*)foo;
-    uchar *start = (uchar*) foo_addr;
+uchar* get_function_end(uchar* start) {
+	int idx = 1;
+	uchar next_func_sig[4] = {0x55, 0x48, 0x89, 0xe5};
 
-    uchar buffer[3] = {0, 0, 0};
+	while (true) {
+		bool go_next = false;
+		for (int i = 0; i < 4; ++i)
+			if (*((uchar*) start + idx + i) != next_func_sig[i]) {
+				go_next = true;
+				break;
+			}
+		if (!go_next)
+			break;
+		idx++;
+	}
+	return (uchar*) start + idx;
+}
 
-    int count = 0;
+void decode(uchar key) {
+    void* foo_addr = (void*)foo;
+    uchar* start = (uchar*) foo_addr;
+    uchar* end = get_function_end(start);
 
-    while ((count < 3) || not ((buffer[0] == 0xc3) && (buffer[1] == 0x66) && (buffer[2] == 0x66))) {
-        buffer[0] = buffer[1];
-        buffer[1] = buffer[2];
-
-        uchar *instruction = (uchar*) foo_addr + count;
-        *instruction = *instruction ^ key;
-
-        buffer[2] = *instruction;
-        count++;
+    int i = 0;
+    uchar* current = start;
+    while (current != end) {
+        *current = *current ^ key;
+        current += 1;
+        i++;
     }
+    printf("%sdecoded\n", SUCCESS.c_str());
 }
