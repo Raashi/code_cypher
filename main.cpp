@@ -19,31 +19,27 @@ const string SUCCESS = "[ OK ] ";
 const string FAIL    = "[FAIL] ";
 
 #define ALLOW_PERMISSIONS    true
-#define RESTRICT_PERMESSIONS false
+#define RESTRICT_PERMISSIONS false
+
+void* exec_function(string, void*);
+int exec_foo(int arg) { return *(int*) exec_function("foo", &arg); }
 
 extern "C" {
 	void* foo(void* a) {
-		printf("%s entering function %s\n", SUCCESS.c_str(), __func__);
-	    
-	    int i= *(int*) a;
-	    i++;
+	    int i = *(int*) a + 1;
 	    printf("i: %d\n", i);
-	    
-	    printf("%s leaving function %s\n", SUCCESS.c_str(), __func__);
 
-	    int* res = new int(i); 
-	    return res;
+	  	if (i >= 20) return new int(i);
+
+	    return new int(exec_foo(i));
 	}
 
 	void* bar(void* a) {
 		pair<int, int> p = *(pair<int, int>*) a;
-
-		int* res = new int(p.first);
-		return res;
+		return new int(p.first);
 	}
 };
 
-void* exec_function(string, void*);
 uchar get_func_key(string);
 
 int change_page_permissions_of_address(func_ptr, bool);
@@ -56,14 +52,14 @@ mapf funcs = {
 };
 
 map<string, uchar> funcs_keys;
+map<string, uint> decoded;
 
 // g++ main.cpp -std=c++11 -o a
 int main(void) {
- 	int a = 2;
- 	int b = *(int*) exec_function("foo", &a);
-    printf("1. Result of foo = %i\n", b);
-    b = *(int*) exec_function("foo", &b);
-    printf("2. Result of foo = %i\n", b);
+ 	int b = exec_foo(2);
+    printf("Result of foo = %i\n", b);
+    // b = *(int*) exec_function("foo", &b);
+    // printf("2. Result of foo = %i\n", b);
 
     return 0;
 }
@@ -87,17 +83,21 @@ void* exec_function(string func_name, void* arg) {
 
 	func_ptr func = funcs[func_name];
 
-	change_page_permissions_of_address(func, ALLOW_PERMISSIONS);
-
-	uchar key = get_func_key(func_name);
-
- 	decode(key, func);
+	if (decoded.find(func_name) == decoded.end()) {
+		uchar key = get_func_key(func_name);
+ 		decode(key, func);
+ 		decoded[func_name] = 0;
+	}
+	decoded[func_name] += 1;
 
  	void* res = (*func)(arg);
 
- 	decode(key, func);
-
- 	change_page_permissions_of_address(func, RESTRICT_PERMESSIONS);
+ 	decoded[func_name] -= 1;
+ 	if (decoded[func_name] == 0) {
+ 		uchar key = get_func_key(func_name);
+ 		decode(key, func);
+ 		decoded.erase(func_name);
+ 	}
 
  	return res;
 }
@@ -146,6 +146,7 @@ uchar* get_function_end(uchar* start) {
 }
 
 void decode(uchar key, func_ptr func) {
+	change_page_permissions_of_address(func, ALLOW_PERMISSIONS);
     uchar* start = (uchar*) func;
     uchar* end = get_function_end(start);
 
@@ -156,5 +157,6 @@ void decode(uchar key, func_ptr func) {
         current += 1;
         i++;
     }
+    change_page_permissions_of_address(func, RESTRICT_PERMISSIONS);
     printf("%s(en/de)coded\n", SUCCESS.c_str());
 }
