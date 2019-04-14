@@ -105,37 +105,39 @@ int main(int argc, char const *argv[])
 	orig_file.read((char*) &data[0], len);
 	orig_file.close();
 
-	cout << SUCCESS << "reading" << endl;
+	cout << SUCCESS << "reading executable" << endl;
 
 	string cmd = "objdump -section=__text -d " + string(argv[1]);
  	string objdump = exec(cmd.c_str()); 	
  	vector<string> dump = split(objdump);
 
- 	if (argc < 3) 
- 		cout << FAIL << "no function names to encode" << endl;
+ 	while (true) {
+ 		string func_name; // = string(argv[i]);
+ 		cout << "Enter function name to encode or ! to exit:" << endl;
+ 		cin >> func_name;
+ 		if (func_name == "!")
+ 			break;
 
- 	uchar key;
- 	unsigned int key_int;
- 	cout << "Enter key: ";
- 	cin >> key_int;
- 	key = key_int;
-
- 	for (int i = 2; i < argc; ++i) {
- 		string func_name = string(argv[i]);
  		pair<int, int> be = get_function_be(dump, func_name);
  		if (be == FUNC_NOT_FOUND) {
- 			cout << FAIL << "function " << func_name << " wasn't found" << endl;
+ 			cout << FAIL << "function <" << func_name << "> wasn't found" << endl;
  			continue;
  		}
+
+	 	unsigned int key_int;
+	 	cout << "Enter key for function <" << func_name << ">:" << endl;
+	 	cin >> key_int;
+	 	uchar key(key_int);
+
  		encode(data, key, extract_address(dump[be.first]), extract_address(dump[be.second]));
- 		cout << SUCCESS << "encoding " << func_name << endl;
+ 		cout << SUCCESS << "encoding <" << func_name << ">" << endl;
  	} 
 
 	ofstream fout(argv[1], ios::out | ios::binary);
  	fout.write((char*)&data[0], data.size() * sizeof(unsigned char));
  	fout.close();
 
- 	cout << SUCCESS << "writing" << endl;
+ 	cout << SUCCESS << "writing executable" << endl;
 
 	return 0;
 }
