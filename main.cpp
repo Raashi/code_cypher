@@ -3,6 +3,7 @@
 #include <errno.h>
 #include <string>
 #include <vector>
+#include <map>
 #include <sys/mman.h>
 
 using namespace std;
@@ -12,65 +13,109 @@ typedef unsigned int uint;
 
 typedef void* (*func_ptr)(void*);
 
+typedef map<string, func_ptr> mapf;
+
 const string SUCCESS = "[ OK ] ";
 const string FAIL    = "[FAIL] ";
 
+#define ALLOW_PERMISSIONS    true
+#define RESTRICT_PERMESSIONS false
+
 extern "C" {
-	void* foo(void*);
+	void* foo(void* a) {
+		printf("%s entering function %s\n", SUCCESS.c_str(), __func__);
+	    
+	    int i= *(int*) a;
+	    i++;
+	    printf("i: %d\n", i);
+	    
+	    printf("%s leaving function %s\n", SUCCESS.c_str(), __func__);
+
+	    int* res = new int(i); 
+	    return res;
+	}
+
+	void* bar(void* a) {
+		pair<int, int> p = *(pair<int, int>*) a;
+
+		int* res = new int(p.first);
+		return res;
+	}
 };
 
-int change_page_permissions_of_address(func_ptr);
+void* exec_function(string, void*);
+uchar get_func_key(string);
+
+int change_page_permissions_of_address(func_ptr, bool);
 bool compare_buffers(uchar buf1[4], uchar buf2[4]);
 uchar* get_function_end(uchar*);
 void decode(uchar, func_ptr);
 
+mapf funcs = {
+	{"foo", foo}
+};
+
+map<string, uchar> funcs_keys;
+
+// g++ main.cpp -std=c++11 -o a
 int main(void) {
-	func_ptr funcs[1] = {foo};
-	vector<func_ptr> funcs_to_decode(&funcs[0], &funcs[1]);
-
-	int key_int;
-    printf("Enter key: ");
-    scanf("%i", &key_int);
- 	uchar key(key_int);
-
-    for (int i = 0; i < funcs_to_decode.size(); ++i) {
-	    if(change_page_permissions_of_address(funcs_to_decode[i]) == -1) {
-	        fprintf(stderr, "Error while changing page permissions of foo(): %s\n", strerror(errno));
-	        return 1;
-	    }
-	    decode(key, funcs_to_decode[i]);
-    }
-
  	int a = 2;
- 	int* arg = new int(a);
- 	int b = *(int*) (*funcs_to_decode[0])(arg);
-    printf("Result of foo = %i\n", b);
+ 	int b = *(int*) exec_function("foo", &a);
+    printf("1. Result of foo = %i\n", b);
+    b = *(int*) exec_function("foo", &b);
+    printf("2. Result of foo = %i\n", b);
 
     return 0;
 }
 
-void* foo(void* a) {
-	printf("%s entering function %s\n", SUCCESS.c_str(), __func__);
-    
-    int i= *(int*) a;
-    i++;
-    printf("i: %d\n", i);
-    
-    printf("%s leaving function %s\n", SUCCESS.c_str(), __func__);
+uchar get_func_key(string func_name) {
+	map<string, uchar>::iterator it = funcs_keys.find(func_name);
+	if (it != funcs_keys.end())
+		return it->second;
 
-    int* res = new int(i); 
-    return res;
+	int key_int;
+    printf("Enter key for func <%s>: ", func_name.c_str());
+    scanf("%i", &key_int);
+ 	uchar key(key_int);
+ 	funcs_keys[func_name] = key;
+ 	return key;
 }
 
-int change_page_permissions_of_address(func_ptr addr) {
+void* exec_function(string func_name, void* arg) {
+	mapf::iterator it = funcs.find(func_name);
+	if (it == funcs.end()) throw runtime_error("no func '" + func_name + "' in map");
+
+	func_ptr func = funcs[func_name];
+
+	change_page_permissions_of_address(func, ALLOW_PERMISSIONS);
+
+	uchar key = get_func_key(func_name);
+
+ 	decode(key, func);
+
+ 	void* res = (*func)(arg);
+
+ 	decode(key, func);
+
+ 	change_page_permissions_of_address(func, RESTRICT_PERMESSIONS);
+
+ 	return res;
+}
+
+int change_page_permissions_of_address(func_ptr addr, bool mode) {
     // Move the pointer to the page boundary
     int page_size = getpagesize();
     // addr -= (unsigned long)addr % page_size;
     char* v = (char*) addr;
     void* new_addr = v - ((unsigned long)addr % page_size);
 
-    if(mprotect(new_addr, page_size, PROT_READ | PROT_WRITE | PROT_EXEC) == -1)
-        return -1;
+    if (mode == ALLOW_PERMISSIONS) {
+	    if(mprotect(new_addr, page_size, PROT_READ | PROT_WRITE | PROT_EXEC) == -1)
+	        return -1;
+	} else {
+		if(mprotect(new_addr, page_size, PROT_READ | PROT_EXEC) == -1)
+	        return -1;
+	}
 
     return 0;
 }
@@ -111,5 +156,5 @@ void decode(uchar key, func_ptr func) {
         current += 1;
         i++;
     }
-    printf("%sdecoded\n", SUCCESS.c_str());
+    printf("%s(en/de)coded\n", SUCCESS.c_str());
 }
